@@ -4,6 +4,7 @@
 
 # Created 2/13/03 Ben Stabler benjamin.stabler@odot.state.or.us
 # Revised 6/11/03 Ben Stabler benjamin.stabler@odot.state.or.us
+# Revised 7/7/03  Ben Stabler benjamin.stabler@odot.state.or.us
 
 # Copyright (C) 2003  Oregon Department of Transportation
 # This program is free software; you can redistribute it and/or
@@ -119,8 +120,8 @@ read.shp <- function(shp.name) {
 				parts <- readBin(infile, integer(), num.parts, endian="little")
 				#Returns X and Y in order for each point of each part
 				points <- readBin(infile, double(), num.points*2, endian="little")
-				X <- points[seq(2,(num.points*2),by=2)]
-				Y <- points[seq(1,(num.points*2),by=2)]
+				X <- points[seq(1,(num.points*2),by=2)]
+				Y <- points[seq(2,(num.points*2),by=2)]
 				points <- data.frame(X,Y)
 			}
 			if (shape.type==0) {
@@ -213,8 +214,8 @@ write.shp <- function(shp, out.name) {
 				writeBin(as.integer(shp$shp[[record]]$parts), outfile, endian="little")
 				#Points - merge the X and Y points into one vector
 				point.stream <- rep(0,length(shp$shp[[record]]$points$X)*2)
-				point.stream[seq(1,length(shp$shp[[record]]$points$Y)*2,by=2)] <- shp$shp[[record]]$points$Y
-				point.stream[seq(2,length(shp$shp[[record]]$points$X)*2,by=2)] <- shp$shp[[record]]$points$X
+				point.stream[seq(1,length(shp$shp[[record]]$points$X)*2,by=2)] <- shp$shp[[record]]$points$X
+				point.stream[seq(2,length(shp$shp[[record]]$points$Y)*2,by=2)] <- shp$shp[[record]]$points$Y
 				writeBin(as.double(point.stream), outfile, endian="little")
 				#Need to check to make sure first and last vertex are the same for Polygon
 			}

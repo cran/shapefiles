@@ -1,6 +1,6 @@
 Package: shapefiles
-Version: 0.1
-Date: 2003-06-02
+Version: 0.2
+Date: 2003-07-07
 Title: Read and Write ESRI Shapefiles
 Author: Ben Stabler <benjamin.stabler@odot.state.or.us>
 Maintainer: Ben Stabler <benjamin.stabler@odot.state.or.us>
