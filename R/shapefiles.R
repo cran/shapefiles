@@ -5,6 +5,7 @@
 # Created 2/13/03 Ben Stabler benjamin.stabler@odot.state.or.us
 # Revised 6/11/03 Ben Stabler benjamin.stabler@odot.state.or.us
 # Revised 7/7/03  Ben Stabler benjamin.stabler@odot.state.or.us
+# Revised 7/23/03 Ben Stabler benjamin.stabler@odot.state.or.us
 
 # Copyright (C) 2003  Oregon Department of Transportation
 # This program is free software; you can redistribute it and/or
@@ -370,6 +371,7 @@ read.dbf <- function(dbf.name) {
 	field.name <- NULL
 	field.type <- NULL
 	field.length <- NULL
+	field.decimal <- NULL
 	
 	#Field Descriptions (32 bytes each)
 	for (i in 1:num.fields) {
@@ -381,11 +383,12 @@ read.dbf <- function(dbf.name) {
 		field.type <- c(field.type,readChar(infile, 1))
 		file.temp <- readBin(infile,integer(), 4, 1, endian="little")
 		field.length <- c(field.length,readBin(infile,integer(), 1, 1, endian="little"))
-		file.temp <- readBin(infile,integer(), 15, 1, endian="little")
+		field.decimal <- c(field.decimal, readBin(infile,integer(), 1, 1, endian="little"))
+		file.temp <- readBin(infile,integer(), 14, 1, endian="little")
 	}
 	
 	#Create a table of the field info
-	fields <- data.frame(NAME=field.name,TYPE=field.type,LENGTH=field.length)
+	fields <- data.frame(NAME=field.name,TYPE=field.type,LENGTH=field.length,DECIMAL=field.decimal)
 	#Set all fields with length<0 equal to correct number of characters
 	fields$LENGTH[fields$LENGTH<0]<-(256+fields$LENGTH[fields$LENGTH<0])
 	#Read in end of attribute descriptions terminator - should be integer value 13
@@ -442,7 +445,7 @@ read.dbf <- function(dbf.name) {
 #Write out DBF format
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-write.dbf <- function(dbf, out.name) {
+write.dbf <- function(dbf, out.name, arcgis=FALSE) {
 	
 	outfile<-file(out.name,"wb")
 		
@@ -459,6 +462,11 @@ write.dbf <- function(dbf, out.name) {
 	#Remove field length + 1 for record start value when writing out
 	dbf$header$fields[1,3] <- dbf$header$fields[1,3] - 1
 	
+	#If output intended for ArcGIS, replace "." with "_" for column names in header
+	if (arcgis==T) {
+		colnames(dbf$dbf) <- gsub("\\.","_",colnames(dbf$dbf))
+	}
+
 	#Field Attributes (32 bytes for each field)
 	for (field in 1:ncol(dbf$dbf)) {
 		#Write field name
@@ -470,9 +478,10 @@ write.dbf <- function(dbf, out.name) {
 		#Write field type (C,N,Y,D)
 		writeChar(as.character(dbf$header$fields[field,2]), outfile, 1, eos = NULL)
 		for (i in 1:4) { writeBin(as.integer(0), outfile, 1, endian="little") }
-		#Write field length
+		#Write field length and field decimals
 		writeBin(as.integer(dbf$header$fields[field,3]), outfile, 1, endian="little")
-		for (i in 1:15) { writeBin(as.integer(0), outfile, 1, endian="little") }
+		writeBin(as.integer(dbf$header$fields[field,4]), outfile, 1, endian="little")
+		for (i in 1:14) { writeBin(as.integer(0), outfile, 1, endian="little") }
 	}
 	#Write end of header value
 	writeBin(as.integer(13), outfile, 1, endian="little")
@@ -490,7 +499,7 @@ write.dbf <- function(dbf, out.name) {
 		white.space <- sapply(rep.amount, function(x) rep(" ", x))
 		#Concatenate white space and existing field data
 		white.space <- matrix(lapply(white.space, function(x) paste(x, collapse="")))
-		record <- paste(data.as.char[i,],white.space, sep="", collapse="")
+		record <- paste(white.space, data.as.char[i,], sep="", collapse="")
 		#Write out record data
 		writeChar(as.character(record), outfile, nchar(record), eos = NULL)
 	}
@@ -518,10 +527,10 @@ read.shapefile <- function(shape.name) {
 #Function to Write out a Shapefile
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-write.shapefile <- function(shapefile, out.name) {
+write.shapefile <- function(shapefile, out.name, arcgis=FALSE) {
 	write.shp(shapefile$shp, paste(out.name, ".shp", sep=""))
 	write.shx(shapefile$shx, paste(out.name, ".shx", sep=""))
-	write.dbf(shapefile$dbf, paste(out.name, ".dbf", sep=""))
+	write.dbf(shapefile$dbf, paste(out.name, ".dbf", sep=""), arcgis)
 }
 
 

@@ -20,10 +20,10 @@ read.shapefile(shape.name)
 read.shp(shp.name)
 read.shx(shx.name) 
 read.dbf(dbf.name) 
-write.shapefile(shapefile, out.name)
+write.shapefile(shapefile, out.name, arcgis=FALSE)
 write.shp(shp, out.name)
 write.shx(shx, out.name)
-write.dbf(dbf, out.name)
+write.dbf(dbf, out.name, arcgis=FALSE)
 calc.header(shapefile)
 add.xy(shapefile)
 scaleXY(shapefile, scale.factor)
@@ -44,6 +44,7 @@ emme2.shp(nodes, links, file.name="d211.in")
 	\item{nodes}{Points shapefile object of lists}
 	\item{links}{Lines shapefile object of lists}
 	\item{file.name}{String of EMME/2 d211 import file to save to}
+	\item{arcgis}{Replace "." with "\_" in column names for ArcGIS}
 }
 
 \details{
@@ -65,8 +66,10 @@ emme2.shp(nodes, links, file.name="d211.in")
 	\cr \cr
 	For details about the ESRI shapefile structure refer to 
 	\url{http://www.esri.com/library/whitepapers/pdfs/shapefile.pdf}.  A detailed description
-	of DBF files can be found at \url{http://www.e-bachmann.dk/docs/xbase.htm}.
-	Note that the \code{RODBC} package function \code{odbcConnectDbase} is faster than \code{read.dbf}.
+	of DBF files can be found at \url{http://www.e-bachmann.dk/docs/xbase.htm}.  The \code{arcgis}
+	argument to \code{write.dbf} replaces "." with "\_" in field names since ArcGIS does not allow
+	the former.  Note that the \code{RODBC} package function \code{odbcConnectDbase} is 
+	faster than \code{read.dbf}.
 }
 
 \value{
@@ -92,13 +95,13 @@ emme2.shp(nodes, links, file.name="d211.in")
 shapefile <- read.shapefile("links")
 
 #Write entire shapefile
-write.shapefile(shapefile, "temp")
+write.shapefile(shapefile, "temp", T)
 
 #Read shp, shx, or dbf file
 dbf <- read.dbf("links.dbf")
 
 #Write shp, shx, or dbf file
-write.dbf(dbf, "links.dbf")
+write.dbf(dbf, "links.dbf", T)
 
 #Calculate header (to clean up GeoMedia shapefile exports)
 shapefile <- calc.header(shapefile)
