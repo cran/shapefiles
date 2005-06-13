@@ -1,10 +1,10 @@
 Package: shapefiles
-Version: 0.3
-Date: 2003-07-23
+Version: 0.4
+Date: 2005-06-13
 Title: Read and Write ESRI Shapefiles
-Author: Ben Stabler <benjamin.stabler@odot.state.or.us>
-Maintainer: Ben Stabler <benjamin.stabler@odot.state.or.us>
+Author: Ben Stabler <benstabler@yahoo.com>
+Maintainer: Ben Stabler <benstabler@yahoo.com>
 Depends: R (>= 1.6.0)
 Description: Functions to read and write ESRI shapefiles
 License: GPL
-URL: http://www.odot.state.or.us/tddtpau/R.html
+Packaged: Mon Jun 13 09:38:54 2005; Ben Stabler
