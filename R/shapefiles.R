@@ -7,7 +7,14 @@
 # Revised 7/7/03  Ben Stabler benjamin.stabler@odot.state.or.us
 # Revised 7/23/03 Ben Stabler benjamin.stabler@odot.state.or.us
 
-# Copyright (C) 2003  Oregon Department of Transportation
+# Revised 8/10/05 Ben Stabler, benstabler@yahoo.com
+# Reading of shape type 13 and 15 from Don MacQueen, macq@llnl.gov
+# Conversion of simple polygons to shapefile format 
+#  	from Manuel Chirouze, Manuel.Chirouze@benfieldgroup.com
+# Small bug fix to write.dbf to deal with 1 column white space correctly
+# Revised 8/15/05 Ben Stabler, to use write.dbf and read.dbf from foreign library
+#  Added dp function as well
+
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
@@ -101,8 +108,8 @@ read.shp <- function(shp.name) {
 	}
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	
-	#PolyLine and Polygon Shapefile
-	if (header$shape.type==3 || header$shape.type==5) {
+	#PolyLine, Polygon, PolyLineZ, and PolygonZ Shapefile
+	if (header$shape.type==3 || header$shape.type==5 || header$shape.type == 13 || header$shape.type == 15) {
 		shape <- list()
 		record.num <- 1
 		while (length(record.num)!=0) {
@@ -119,12 +126,30 @@ read.shp <- function(shp.name) {
 				num.parts <- readBin(infile, integer(), 1, endian="little")
 				num.points <- readBin(infile, integer(), 1, endian="little")
 				parts <- readBin(infile, integer(), num.parts, endian="little")
-				#Returns X and Y in order for each point of each part
 				points <- readBin(infile, double(), num.points*2, endian="little")
 				X <- points[seq(1,(num.points*2),by=2)]
 				Y <- points[seq(2,(num.points*2),by=2)]
 				points <- data.frame(X,Y)
 			}
+			
+			#Type 13 polylineZ (and 15 polygonZ since it is the same as 13)
+			if (shape.type==13 || shape.type==15) {
+			        box <- readBin(infile, double(), 4, endian = "little")
+			        names(box) <- c("xmin", "ymin", "xmax", "ymax")
+			        num.parts <- readBin(infile, integer(), 1, endian = "little")
+			        num.points <- readBin(infile, integer(), 1, endian = "little")
+			        parts <- readBin(infile, integer(), num.parts, endian = "little")
+			        points <- readBin(infile, double(), num.points * 2, endian = "little")
+			        X <- points[seq(1, (num.points * 2), by = 2)]
+			        Y <- points[seq(2, (num.points * 2), by = 2)]
+			        #Additional information for type 13 and 15
+			        zrange <- readBin(infile,double(),2,endian='little')
+			        Z <- readBin(infile,double(),num.points,endian='little')
+			        mrange <- readBin(infile,double(),2,endian='little')
+			        M <- readBin(infile,double(),num.points,endian='little')
+			        points <- data.frame(X, Y, Z, M)
+			}
+					
 			if (shape.type==0) {
 				#Null shape type has no data
 				box <- rep(NA,4)
@@ -140,9 +165,13 @@ read.shp <- function(shp.name) {
 	}
 	#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	
-	if (header$shape.type==1) { return <- point.data }
-	if (header$shape.type==3 || header$shape.type==5) { return <- shape }
-	list(shp=return,header=header)
+	if (header$shape.type==1) { 
+		return.val <- point.data 
+	}
+	if (header$shape.type==3 || header$shape.type==5 || header$shape.type == 13 || header$shape.type == 15) { 
+		return.val <- shape
+	}
+	list(shp=return.val,header=header)
 }	
 
 
@@ -193,7 +222,7 @@ write.shp <- function(shp, out.name) {
 		}
 	}
 	
-	if (shp$header$shape.type==3 || shp$header$shape.type==5) {
+	if (shp$header$shape.type==3 || shp$header$shape.type==5 || shp$header$shape.type == 13 || shp$header$shape.type == 15) {
 		for (record in 1:length(shp$shp)) {
 			if (shp$shp[[record]]$shape.type==3 || shp$shp[[record]]$shape.type==5) {
 				#Record Number
@@ -220,6 +249,51 @@ write.shp <- function(shp, out.name) {
 				writeBin(as.double(point.stream), outfile, endian="little")
 				#Need to check to make sure first and last vertex are the same for Polygon
 			}
+			
+			#Type 13 polylineZ (and 15 polygonZ since it is the same as 13)
+			if (shp$shp[[record]]$shape.type==13 || shp$shp[[record]]$shape.type==15) {
+			
+				#Record Number
+				writeBin(as.integer(shp$shp[[record]]$record), outfile, endian="big")
+				#Content Length
+				writeBin(as.integer(shp$shp[[record]]$content.length), outfile, endian="big")
+				#Shape Type
+				writeBin(as.integer(shp$shp[[record]]$shape.type), outfile, endian="little")
+				#Bounding Box
+				writeBin(as.double(shp$shp[[record]]$box[1]), outfile, endian="little")
+				writeBin(as.double(shp$shp[[record]]$box[2]), outfile, endian="little")
+				writeBin(as.double(shp$shp[[record]]$box[3]), outfile, endian="little")
+				writeBin(as.double(shp$shp[[record]]$box[4]), outfile, endian="little")
+				#Number of parts (segments)
+				writeBin(as.integer(shp$shp[[record]]$num.parts), outfile, endian="little")
+				#Number of total points
+				writeBin(as.integer(shp$shp[[record]]$num.points), outfile, endian="little")
+				#Parts
+				writeBin(as.integer(shp$shp[[record]]$parts), outfile, endian="little")
+				
+				#Points - merge the X and Y points into one vector
+				point.stream <- rep(0,length(shp$shp[[record]]$points$X)*2)
+				point.stream[seq(1,length(shp$shp[[record]]$points$X)*2,by=2)] <- shp$shp[[record]]$points$X
+				point.stream[seq(2,length(shp$shp[[record]]$points$Y)*2,by=2)] <- shp$shp[[record]]$points$Y
+				writeBin(as.double(point.stream), outfile, endian="little")
+				#Need to check to make sure first and last vertex are the same for Polygon
+			
+				#Write out Z Range and Z values
+				minZ <- min(shp$shp[[record]]$points$Z)
+				maxZ <- max(shp$shp[[record]]$points$Z)
+				writeBin(as.double(minZ), outfile, endian='little')
+				writeBin(as.double(maxZ), outfile, endian='little')
+				writeBin(as.double(shp$shp[[record]]$points$Z), outfile, endian='little')
+				
+				#Write out M Range and M values
+				minM <- min(shp$shp[[record]]$points$M)
+				maxM <- max(shp$shp[[record]]$points$M)
+				writeBin(as.double(minM), outfile, endian='little')
+				writeBin(as.double(maxM), outfile, endian='little')				
+				writeBin(as.double(shp$shp[[record]]$points$M), outfile, endian='little')
+			}
+			
+			
 			if (shp$shp[[record]]$shape.type==0) {
 				#Record Number
 				writeBin(as.integer(shp$shp[[record]]$record), outfile, endian="big")
@@ -349,94 +423,68 @@ write.shx <- function(shx, out.name) {
 #Read DBF format
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-read.dbf <- function(dbf.name) {
+read.dbf <- function(dbf.name, header=FALSE) {
 	
-	infile<-file(dbf.name,"rb")
+	#Load foreign package for read.dbf
+	library(foreign)
 	
-	#Header
-	file.version <- readBin(infile,integer(), 1, size=1, endian="little")
-	file.year <- readBin(infile,integer(), 1, size=1, endian="little")
-	file.month <- readBin(infile,integer(), 1, size=1, endian="little")
-	file.day <- readBin(infile,integer(), 1, size=1, endian="little")
-	num.records <- readBin(infile,integer(), 1, size=4, endian="little")
-	header.length <- readBin(infile,integer(), 1, size=2, endian="little")
-	record.length <- readBin(infile,integer(), 1, size=2, endian="little")
-	file.temp <- readBin(infile,integer(), 20, size=1, endian="little")
-	header <- list(file.version,file.year, file.month, file.day, num.records, header.length, record.length)
-	names(header) <- c("file.version","file.year","file.month","file.day","num.records","header.length","record.length")
-	rm(file.version,file.year, file.month, file.day, num.records, header.length, record.length)
-		
-	#Calculate the number of fields
-	num.fields <- (header$header.length-32-1)/32
-	field.name <- NULL
-	field.type <- NULL
-	field.length <- NULL
-	field.decimal <- NULL
-	
-	#Field Descriptions (32 bytes each)
-	for (i in 1:num.fields) {
-		field.name.test <- readBin(infile,character(), 1, size=10, endian="little")
-		field.name <- c(field.name,field.name.test)
-		if (nchar(field.name.test)!=10) {
-			file.temp <- readBin(infile,integer(), 10-(nchar(field.name.test)), 1, endian="little")
-		}	
-		field.type <- c(field.type,readChar(infile, 1))
-		file.temp <- readBin(infile,integer(), 4, 1, endian="little")
-		field.length <- c(field.length,readBin(infile,integer(), 1, 1, endian="little"))
-		field.decimal <- c(field.decimal, readBin(infile,integer(), 1, 1, endian="little"))
-		file.temp <- readBin(infile,integer(), 14, 1, endian="little")
-	}
-	
-	#Create a table of the field info
-	fields <- data.frame(NAME=field.name,TYPE=field.type,LENGTH=field.length,DECIMAL=field.decimal)
-	#Set all fields with length<0 equal to correct number of characters
-	fields$LENGTH[fields$LENGTH<0]<-(256+fields$LENGTH[fields$LENGTH<0])
-	#Read in end of attribute descriptions terminator - should be integer value 13
-	file.temp <- readBin(infile,integer(), 1, 1, endian="little")
-	#Increase the length of field 1 by one to account for the space at the beginning of each record	
-	fields$LENGTH[1]<-fields$LENGTH[1]+1
-	#Add fields to the header list
-	header <- c(header,fields=NULL)
-	header$fields <- fields
-	
-	#Read in each record to a list element
-	all.records <- list()
-	for (i in 1:header$num.records) {
-		all.records <- c(all.records, list(readChar(infile, header$record.length)))
-	}
-	#Close the dbf file connection
-	close(infile)
-	
-	#Function to split the strings and replace all " " with "" at the end of string
-	format.record <- function(record) {
-		record <- substring(record, c(1,cumsum(fields$LENGTH)[1:length(cumsum(fields$LENGTH))-1]+1),cumsum(fields$LENGTH))
-		record <- gsub(" +$","", record)
-		record
-	}
-	
-	#Split each record into columns and save as data.frame
-	dbf <- data.frame(t(data.frame(lapply(all.records, format.record))))
-	rm(all.records)
-	dimnames(dbf) <- list(1:header$num.records, header$fields$NAME)
-	
-	#Set the numeric fields to numeric
-	for (i in 1:ncol(dbf)) {
-		if(fields$TYPE[i]=="C") { dbf[[i]] <- as.character(dbf[[i]]) }
-		if(fields$TYPE[i]=="N") { dbf[[i]] <- as.numeric(as.character(dbf[[i]])) }
-		if(fields$TYPE[i]=="F") { dbf[[i]] <- as.numeric(as.character(dbf[[i]])) 
-			warning("Possible trouble converting numeric field in the DBF\n")
+	#Read header if needed
+	if(header) {
+		infile<-file(dbf.name,"rb")
+
+		#Header
+		file.version <- readBin(infile,integer(), 1, size=1, endian="little")
+		file.year <- readBin(infile,integer(), 1, size=1, endian="little")
+		file.month <- readBin(infile,integer(), 1, size=1, endian="little")
+		file.day <- readBin(infile,integer(), 1, size=1, endian="little")
+		num.records <- readBin(infile,integer(), 1, size=4, endian="little")
+		header.length <- readBin(infile,integer(), 1, size=2, endian="little")
+		record.length <- readBin(infile,integer(), 1, size=2, endian="little")
+		file.temp <- readBin(infile,integer(), 20, size=1, endian="little")
+		header <- list(file.version,file.year, file.month, file.day, num.records, header.length, record.length)
+		names(header) <- c("file.version","file.year","file.month","file.day","num.records","header.length","record.length")
+		rm(file.version,file.year, file.month, file.day, num.records, header.length, record.length)
+
+		#Calculate the number of fields
+		num.fields <- (header$header.length-32-1)/32
+		field.name <- NULL
+		field.type <- NULL
+		field.length <- NULL
+		field.decimal <- NULL
+
+		#Field Descriptions (32 bytes each)
+		for (i in 1:num.fields) {
+			field.name.test <- readBin(infile,character(), 1, size=10, endian="little")
+			field.name <- c(field.name,field.name.test)
+			if (nchar(field.name.test)!=10) {
+				file.temp <- readBin(infile,integer(), 10-(nchar(field.name.test)), 1, endian="little")
+			}	
+			field.type <- c(field.type,readChar(infile, 1))
+			file.temp <- readBin(infile,integer(), 4, 1, endian="little")
+			field.length <- c(field.length,readBin(infile,integer(), 1, 1, endian="little"))
+			field.decimal <- c(field.decimal, readBin(infile,integer(), 1, 1, endian="little"))
+			file.temp <- readBin(infile,integer(), 14, 1, endian="little")
 		}
+
+		#Create a table of the field info
+		fields <- data.frame(NAME=field.name,TYPE=field.type,LENGTH=field.length,DECIMAL=field.decimal)
+		#Set all fields with length<0 equal to correct number of characters
+		fields$LENGTH[fields$LENGTH<0]<-(256+fields$LENGTH[fields$LENGTH<0])
+		#Read in end of attribute descriptions terminator - should be integer value 13
+		file.temp <- readBin(infile,integer(), 1, 1, endian="little")
+		#Increase the length of field 1 by one to account for the space at the beginning of each record	
+		fields$LENGTH[1]<-fields$LENGTH[1]+1
+		#Add fields to the header list
+		header <- c(header,fields=NULL)
+		header$fields <- fields
+
+		#Close file connection
+		close(infile)
 	}
 	
-	#If the first field is of type character then remove the first 
-	#character of each record since the DBF stores a space for a 
-	#valid record and an * for a deleted record.
-	#If the field is numeric then R removes the white space
-	if(fields[1,2]=="C") { dbf[[1]] <- gsub("^[ *]", "", as.character(dbf[[1]])) }
-	
-	colnames(dbf) <- as.character(fields$NAME)
-	colnames(dbf) <- gsub("_",".",colnames(dbf))
-	
+	#Read in dbf
+	dbf <- get("read.dbf","package:foreign")(dbf.name)
+
 	#Return the dbf as a list with a data.frame and a header list
 	list(dbf=dbf, header=header)
 }
@@ -447,66 +495,16 @@ read.dbf <- function(dbf.name) {
 
 write.dbf <- function(dbf, out.name, arcgis=FALSE) {
 	
-	outfile<-file(out.name,"wb")
-		
-	#File Header
-	writeBin(as.integer(3), outfile, 1, endian="little")
-	writeBin(as.integer(paste("1",substr(strsplit(date()," ")[[1]][5],3,5), sep="")), outfile, 1, endian="little")
-	writeBin(as.integer(1), outfile, 1, endian="little") 
-	writeBin(as.integer(strsplit(date()," ")[[1]][3]), outfile, 1, endian="little")
-	writeBin(as.integer(dbf$header$num.records), outfile, 4, endian="little")
-	writeBin(as.integer(dbf$header$header.length), outfile, 2, endian="little")
-	writeBin(as.integer(dbf$header$record.length), outfile, 2, endian="little")
-	for (i in 1:20) { writeBin(as.integer(0), outfile, 1, endian="little") }
-	
-	#Remove field length + 1 for record start value when writing out
-	dbf$header$fields[1,3] <- dbf$header$fields[1,3] - 1
+	#Load foreign package for write.dbf
+	library(foreign)
 	
 	#If output intended for ArcGIS, replace "." with "_" for column names in header
 	if (arcgis==T) {
 		colnames(dbf$dbf) <- gsub("\\.","_",colnames(dbf$dbf))
 	}
-
-	#Field Attributes (32 bytes for each field)
-	for (field in 1:ncol(dbf$dbf)) {
-		#Write field name
-		field.name <- colnames(dbf$dbf)[field]
-		writeBin(as.character(field.name), outfile, 10, endian="little")
-		if (nchar(as.character(field.name))<10) {
-			for (i in 1:(10-nchar(field.name))) { writeBin(as.integer(0), outfile, 1, endian="little") }
-		}
-		#Write field type (C,N,Y,D)
-		writeChar(as.character(dbf$header$fields[field,2]), outfile, 1, eos = NULL)
-		for (i in 1:4) { writeBin(as.integer(0), outfile, 1, endian="little") }
-		#Write field length and field decimals
-		writeBin(as.integer(dbf$header$fields[field,3]), outfile, 1, endian="little")
-		writeBin(as.integer(dbf$header$fields[field,4]), outfile, 1, endian="little")
-		for (i in 1:14) { writeBin(as.integer(0), outfile, 1, endian="little") }
-	}
-	#Write end of header value
-	writeBin(as.integer(13), outfile, 1, endian="little")
 	
-	#Convert dbf to characters
-	data.as.char <- apply(dbf$dbf,2,as.character)
-	field.lengths <- dbf$header$fields$LENGTH
-
-	#Write out records
-	for (i in 1:nrow(dbf$dbf)) {
-		#Write out record start value
-		writeBin(as.integer(32), outfile, 1, endian="little")
-		#Calculate white space to add to fields in each record
-		rep.amount <- field.lengths-nchar(data.as.char[i,])
-		white.space <- sapply(rep.amount, function(x) rep(" ", x))
-		#Concatenate white space and existing field data
-		white.space <- matrix(lapply(white.space, function(x) paste(x, collapse="")))
-		record <- paste(white.space, data.as.char[i,], sep="", collapse="")
-		#Write out record data
-		writeChar(as.character(record), outfile, nchar(record), eos = NULL)
-	}
-	
-	#Write end of file value
-	writeBin(as.integer(26), outfile, 1, endian="little")
-	close(outfile)
+	#Write out dbf
+	get("write.dbf","package:foreign")(dbf$dbf, out.name)
 }
 
 
@@ -517,7 +515,7 @@ write.dbf <- function(dbf, out.name, arcgis=FALSE) {
 read.shapefile <- function(shape.name) {
 	shp.data <- read.shp(paste(shape.name, ".shp", sep=""))
 	shx.data <- read.shx(paste(shape.name, ".shx", sep=""))
-	dbf.data <- read.dbf(paste(shape.name, ".dbf", sep=""))
+	dbf.data <- get("read.dbf","package:shapefiles")(paste(shape.name, ".dbf", sep=""))
 	shapefile <- list(shp=shp.data,shx=shx.data,dbf=dbf.data)		
 	shapefile
 }
@@ -530,7 +528,7 @@ read.shapefile <- function(shape.name) {
 write.shapefile <- function(shapefile, out.name, arcgis=FALSE) {
 	write.shp(shapefile$shp, paste(out.name, ".shp", sep=""))
 	write.shx(shapefile$shx, paste(out.name, ".shx", sep=""))
-	write.dbf(shapefile$dbf, paste(out.name, ".dbf", sep=""), arcgis)
+	get("write.dbf","package:shapefiles")(shapefile$dbf, paste(out.name, ".dbf", sep=""), arcgis)
 }
 
 
@@ -581,28 +579,269 @@ scaleXY <- function(shapefile, scale.factor) {
 	shapefile
 }
 
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Function to create batchin emme2 network (d211.in)
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#Create emme2 batchin network file from links and nodes shapefiles
-#links <- read.shapefile("links")
-#nodes <- read.shapefile("nodes")
-
-emme2.shp <- function(nodes, links, file.name="d211.in") {
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#Converts a simple point, polyLine, or polygon data frame into a shapefile. 
+#The shpTable data frame must have three columns in this order: Id, X, and Y. 
+#The attTable data frame must have a field to join on - identified by field
+#The type argument is either 1 (point), 3 (polyline) or 5 (polygon).
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+convert.to.shapefile <- function(shpTable, attTable, field, type) {
 	
-	outfile <- file(file.name, "w")
+	#Check to ensure field in attTable
+		if(!(field %in% colnames(attTable))) {
+			stop("Field not in attTable column names")
+	}
 	
-	#Nodes
-	writeLines(paste("c R emme2 batchin file  ", date(), sep=""), outfile)
-	writeLines("t nodes init", outfile)
-	node.records <- paste("a",nodes$dbf$dbf[,2],round(nodes$shp$shp[,2],3),round(nodes$shp$shp[,3],3),nodes$dbf$dbf$UD1,nodes$dbf$dbf$UD2,nodes$dbf$dbf$UD3)
-	writeLines(node.records, outfile)
-	#Links
-	writeLines(paste("c R emme2 batchin file  ", date(), sep=""), outfile)
-	writeLines("t links init", outfile)
-	link.records <- paste("a", links$dbf$dbf[,1], links$dbf$dbf[,2], links$dbf$dbf[,3], links$dbf$dbf[,4], links$dbf$dbf[,5], links$dbf$dbf[,6], links$dbf$dbf[,7], links$dbf$dbf[,8], links$dbf$dbf[,9], links$dbf$dbf[,10])
-	writeLines(link.records, outfile)
-	close(outfile)
+	#Check to ensure the same Id set in shpTable and attTable
+	if(length(unique(shpTable[,1])) != length(attTable[,field])) {
+		stop("Different number of unique Ids in shpTable versus attTable")
+	}
+	
+	if(any(sort(unique(shpTable[,1])) != sort(attTable[,field]))) {
+		stop("Id set in shpTable not the same as Id set in attTable") 
+	}
+	
+	#Build dbf - no longer uses header since "foreign.write.dbf" does not
+	dbf <- list(dbf=attTable,header=NULL)
+
+	#Build shp file
+
+	#shp list
+	shpTable[,c(2,3)] <- round(shpTable[,c(2,3)], 5)
+	colnames(shpTable) <- c("Id","X","Y")
+	v.content.length <- vector()
+
+	#point
+	if(type == 1) {
+	
+		#loop for each entry in the dbf and build a shape
+		for (i in 1:nrow(attTable)) {
+		
+			#Get shape entries for attTable Id i
+			shpTable.i <- shpTable[which(shpTable[,1] == attTable[i,field]), -1] 
+			p.content.length <- 10 #shape.type and 2 doubles
+			v.content.length[i] <- p.content.length
+			if(i == 1) {
+				shp <- data.frame(
+					record = i,
+					x = shpTable.i[,1],
+					y = shpTable.i[,2],
+					shape.type = type)
+			} else {
+				shp2 <- data.frame(
+					record = i,
+					x = shpTable.i[,1],
+					y = shpTable.i[,2],
+					shape.type = type)
+				shp <- rbind(shp, shp2)
+				rm(shp2)
+			}
+		}
+	}	
+	
+	#polyLine and polygon shp
+	if(type == 3 || type == 5) {
+		
+		#shp file
+		shp<-list()
+		
+		#loop for each entry in the dbf and build a shape
+		for (i in 1:nrow(attTable)) {
+		
+			#Get shape entries for attTable Id i
+			shpTable.i <- shpTable[which(shpTable[,1] == attTable[i,field]), -1] 
+			num.points <- nrow(shpTable.i)
+			v.box <- c(min(shpTable.i[,1]),min(shpTable.i[,2]),max(shpTable.i[,1]),max(shpTable.i[,2]))
+			names(v.box) <- c("xmin","ymin","xmax","ymax")
+			p.content.length <- 24 + (num.points * 8)
+			v.content.length[i] <- p.content.length
+			shp[[i]]<-list(record = i,
+				content.length = p.content.length,
+				shape.type = type,
+				box = v.box,
+				num.parts = 1, #Only 1 part
+				num.points = nrow(shpTable.i),
+				parts = 0, 
+				points = shpTable.i)
+		}
+	}
+
+	#Collect up all shp info
+	header<-list(file.code = 9994,
+		file.length = 50 + sum(v.content.length + 4),
+		file.version = 1000,
+		shape.type = type,
+		xmin = min(shpTable[,2]),
+		ymin = min(shpTable[,3]),
+		xmax = max(shpTable[,2]),
+		ymax = max(shpTable[,3]),
+		zmin = 0,
+		zmax = 0,
+		mmin = 0,
+		mmax = 0)
+	shp <- list(shp=shp, header=header)
+
+	#Build shx file
+
+	#shx list
+	shx<-list(index = cbind(Offset=c(50 ,(cumsum(v.content.length + 4) + 50)[-length(v.content.length)]),
+		Length = v.content.length),
+		header = shp$header)
+
+	shx$header$file.length <- 50 + 4 * nrow(shx$index)
+
+#Return shapefile
+shp.file <- list(shp=shp, shx=shx, dbf=dbf)
+shp.file
+
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#Convert read.shp result to simple data.frame format (Id, X, Y)
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+convert.to.simple <- function(shp) {
+	
+	#Determine type of shp
+	if(shp$header$shape.type == 1) {
+		#Get points
+		allPoints <- shp$shp[,c("record","x","y")]
+		colnames(allPoints) <- c("Id", "X", "Y")
+	
+	} else {
+		#Get points
+		allPoints <- do.call(rbind, lapply(shp$shp, function(x) x$points[,c("X","Y")]))
+		
+		#Calculate index and add to points
+		indexes <- 1:length(shp$shp)
+		repNum <- lapply(shp$shp, function(x) nrow(x$points))
+		allPoints <- cbind(Id=rep(indexes, repNum), allPoints)
+	}
+	
+	#Return allPoints
+	allPoints
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#Change Index to a Field from the DBF
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#Changes the Index field of the shpTable to the new vector of fields
+#Will replace the records in order, so Index 1 = element 1 in the new vector
+change.id <- function(shpTable, newFieldAsVector) {
+	
+	#Check to ensure the same Id set in shpTable and attTable
+	if(length(unique(shpTable[,1])) != length(newFieldAsVector)) {
+		stop("Different number of unique Ids in shpTable versus new field")
+	}
+
+	#Create new vector
+	count <- table(shpTable[,1])
+	shpTable[,1] <- rep(newFieldAsVector, count)
+	
+	#Return result
+	shpTable
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#Douglas-Peucker Polyline Simplification
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#Ben Stabler, bstabler@ptvamerica.com, March 2005
+#Douglas, D. and Peucker, T. (1973). "Algorithms for 
+#the reduction of the number of points required to 
+#represent a digitized line or its caricature." 
+#The Canadian Cartographer 10(2). 112-122.
+
+#Currently uses the line, not the line segment to 
+#determine the distance of the points from the line.
+#See http://www.lgc.com/resources/Doug_Peucker.pdf
+#for more information.  This can result in the 
+#omission of extreme "outlier-like" points. Try:
+#points<-list(x=c(200,0,400),y=c(0,20,0))
+#plot(points, type="l")
+#lines(dp(points, 50), type="l", col="blue")
+
+#Simple Example
+#x <- c(5,3,4,1,8,9,10,11)
+#y <- c(6,4,2,1,1,5,2,3)
+#points <- list(x=x,y=y)
+#plot(points, type="l")
+#lines(dp(points, 2), type="l", col="blue")
+
+####################################################
+
+dp <- function(points, tolerance) {
+
+ #Convert to lowercase
+ names(points) <- tolower(names(points))
+
+ #Calculate distance between two points
+ distance <- function(x1,x2,y1,y2) {
+ 	sqrt((x2-x1)^2 + (y2-y1)^2)
+ }
+ 
+ #Calculate equation of a line from two points
+ equationOfLine <- function(x1,x2,y1,y2) {
+ 	slope <- (y2-y1)/(x2-x1)
+ 	b <- y1 - slope * x1
+ 	c(slope,b)
+ }
+ 
+ #Calculate y-intercept from a point and a slope
+ calcB <- function(slope, px, py) {
+ 	py - (slope * px) 
+ }
+ 
+ #Calculate intercept of two lines from their slope and y-intercept
+ intercept <- function(s1,b1,s2,b2) {
+ 	x1 <- (b2-b1)/(s1-s2)
+ 	y1 <- s1 * x1 + b1
+ 	c(x1,y1)
+ }
+
+ #Setup vector to mark points to keep
+ keep <- rep(F, length(points$x))
+ keep[1] <- T
+ keep[length(keep)] <- T
+
+ #Function definition to simplify points
+ simplify <- function(start, end, tol=tolerance) {
+
+  #Calculate intermediate point distances 
+  if (length(points$x[start:end]) > 2) {
+
+ 	#Avoid Inf slope
+ 	if( points$x[start] ==  points$x[end] ) { points$x[start] <- points$x[start] - 0.0000001 }
+ 	if( points$y[start] ==  points$y[end]) { points$y[start] <- points$y[start] - 0.0000001 }
+ 
+	#Calculate equation of line of middle points
+ 	line <- equationOfLine( points$x[start], points$x[end], points$y[start], points$y[end])
+	
+	#Calculate y-intercepts
+ 	b <- mapply(function(x,y) calcB(-1/line[1], x, y), points$x[(start+1):(end-1)], points$y[(start+1):(end-1)])
+	
+	#Calculate intercepts with with start-end line
+ 	ints <- sapply(b, function(x) intercept(line[1], line[2], -1/line[1], x), simplify=F)
+
+	#Calculate distances of points from line
+ 	distances <- mapply(function(x,y,z) distance(x[[1]], y, x[[2]], z), ints, 
+		points$x[(start+1):(end-1)], points$y[(start+1):(end-1)])
+
+	#If any point greater than tolerance split at max distance point and apply to each side
+ 	if (any(distances >= tol)) {
+		keep[which.max(distances)+start] <<- T
+		#print(which.max(distances)+start)
+		
+		simplify(start, which.max(distances)+start)
+		simplify(which.max(distances)+start, end)
+	}
+
+  }
+
+ }
+
+ #Start simplification 
+ simplify(1, length(points$x))
+
+ #Return simplified points
+ list(x=points$x[keep], y=points$y[keep])
 }
 
