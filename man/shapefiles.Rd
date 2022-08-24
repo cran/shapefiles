@@ -48,7 +48,7 @@ dp(points, tolerance)
 	\item{shx}{shx portion (list) of the shapefile object of lists}
 	\item{dbf}{dbf portion (list) of the shapefile object of lists}
 	\item{scale.factor}{Number to divide the shapefile geography by}
-	\item{arcgis}{Replace "." with "\_" in column names for ArcGIS}
+	\item{arcgis}{Replace "." with "_" in column names for ArcGIS}
 	\item{shpTable}{data.frame with columns in order Id, X, and Y}
 	\item{attTable}{data.frame with first column names "Id" - polygon id (key)}
 	\item{type}{ESRI Shape type 1=point, 3=polyLine, 5=polygon}
@@ -91,9 +91,9 @@ dp(points, tolerance)
 	a data.frame (dbf).
 	\cr \cr
 	For details about the ESRI shapefile structure refer to 
-	\url{http://www.esri.com/library/whitepapers/pdfs/shapefile.pdf}.  A detailed description
-	of DBF files can be found at \url{http://www.e-bachmann.dk/docs/xbase.htm}.  The \code{arcgis}
-	argument to \code{write.dbf} replaces "." with "\_" in field names since ArcGIS does not allow
+	\url{https://www.esri.com/content/dam/esrisites/sitecore-archive/Files/Pdfs/library/whitepapers/pdfs/shapefile.pdf}.  A detailed description
+	of DBF files can be found at \url{https://www.e-bachmann.dk/docs/xbase.htm}.  The \code{arcgis}
+	argument to \code{write.dbf} replaces "." with "_" in field names since ArcGIS does not allow
 	the former.  Note that the \code{read.dbf} and \code{write.dbf} functions in the foreign
 	package are now used for reading and writing dbfs, which greatly improves the speed of 
 	reading/writing dbfs.
@@ -103,7 +103,7 @@ dp(points, tolerance)
 	of points required to represent a digitized line or its caricature." The Canadian
 	Cartographer 10(2). 112-122.  \code{dp} currently uses the line, not the line segment to determine
 	the distance of the points from the line. This can result in the omission of extreme
-	"outlier-like" points. See \url{http://www.lgc.com/resources/Doug_Peucker.pdf} for more information.
+	"outlier-like" points. See \doi{10.3138/FM57-6770-U75U-7727} for more information.
 }
 
 \value{

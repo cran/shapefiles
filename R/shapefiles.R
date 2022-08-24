@@ -426,7 +426,7 @@ write.shx <- function(shx, out.name) {
 read.dbf <- function(dbf.name, header=FALSE) {
 	
 	#Load foreign package for read.dbf
-	library(foreign)
+        ## library(foreign)
 	
 	#Read header if needed
 	if(header) {
@@ -496,7 +496,7 @@ read.dbf <- function(dbf.name, header=FALSE) {
 write.dbf <- function(dbf, out.name, arcgis=FALSE) {
 	
 	#Load foreign package for write.dbf
-	library(foreign)
+	## library(foreign)
 	
 	#If output intended for ArcGIS, replace "." with "_" for column names in header
 	if (arcgis==T) {
