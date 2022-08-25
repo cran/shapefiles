@@ -483,7 +483,7 @@ read.dbf <- function(dbf.name, header=FALSE) {
 	}
 	
 	#Read in dbf
-	dbf <- get("read.dbf","package:foreign")(dbf.name)
+	dbf <- foreign::read.dbf(dbf.name)
 
 	#Return the dbf as a list with a data.frame and a header list
 	list(dbf=dbf, header=header)
@@ -504,7 +504,7 @@ write.dbf <- function(dbf, out.name, arcgis=FALSE) {
 	}
 	
 	#Write out dbf
-	get("write.dbf","package:foreign")(dbf$dbf, out.name)
+        foreign::write.dbf(dbf$dbf, out.name)
 }
 
 
